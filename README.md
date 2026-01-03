@@ -47,24 +47,6 @@ For more details, explore the [PipeCD Documentation](https://pipecd.dev/docs).
 
 ---
 
-### Quick Links
-
-| Resource | Description |
-|----------|-------------|
-| 📚 [Documentation](https://pipecd.dev/docs/) | Complete documentation and guides |
-| 🚀 [Quickstart](https://pipecd.dev/docs/quickstart/) | Get started in minutes |
-| 🎮 [Playground](https://play.pipecd.dev?project=play) | Try PipeCD without installation |
-| 🏗️ [Architecture](./ARCHITECTURE.md) | System design and components |
-| 🔧 [Development Guide](./DEVELOPMENT_GUIDE.md) | Contributing and development setup |
-| 🧪 [Testing Guide](./TESTING.md) | Writing and running tests |
-| 🐛 [Troubleshooting](./TROUBLESHOOTING.md) | Common issues and solutions |
-| 📖 [API Documentation](./API_DOCUMENTATION.md) | API reference and usage |
-| 🎨 [Code Style](./CODE_STYLE.md) | Coding standards and conventions |
-| 🗺️ [Roadmap](./ROADMAP.md) | Future plans and features |
-| ✨ [Recent Improvements](./IMPROVEMENTS_README.md) | What changed and why |
-| 💬 [Slack Channel](https://cloud-native.slack.com/archives/C01B27F9T0X) | Join the community |
-| 📅 [Community Meetings](https://bit.ly/pipecd-mtg-notes) | Bi-weekly meetings |
-
 ### Getting Started
 
 - The [quickstart guide](https://pipecd.dev/docs/quickstart/) shows how to set up PipeCD components and deploy a hello-world application with PipeCD for testing purposes.

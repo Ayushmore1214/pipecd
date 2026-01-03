@@ -10,16 +10,8 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
-coverage.out
-coverage.txt
-*.coverprofile
 
-# OS specific files
 .DS_Store
-Thumbs.db
-*.swp
-*.swo
-*~
 
 # Bazel
 /bazel-bin
@@ -38,49 +30,29 @@ Thumbs.db
 go.work
 go.work.sum
 
-# Node.js
+# nodejs
 node_modules
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.npm
-.eslintcache
 
-# Web
+# web
 web/dist
 web/.env
 web/.cache
 web/coverage
-web/build
 pkg/app/web/.env
 
 # IDE config files
 .ijwb
 .idea
-.vscode/settings.json
-.vscode/launch.json
-*.sublime-project
-*.sublime-workspace
-.project
-.classpath
-.settings/
 
-# Development
 .dev
-*.local
 
 # Terraform workspace
 .terraform
 .terraform-credentials
-*.tfstate
-*.tfstate.*
-*.tfvars
 
-# Kubernetes
 .rendered-manifests
-*.kubeconfig
 
-# Helm manifests
+# manfiests
 manifests/pipecd/charts
 manifests/piped/charts
 manifests/site/charts
@@ -94,44 +66,3 @@ gomock_reflect_*/
 
 # hack
 hack/oidc/realm.local.json
-
-# Logs
-*.log
-logs/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Documentation builds
-docs/public/
-docs/resources/
-docs/.hugo_build.lock
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# Pre-commit
-.pre-commit-config-local.yaml
-
-# Profiling
-*.prof
-*.pprof
-cpu.prof
-mem.prof
-heap.prof
-
-# Archives
-*.tar.gz
-*.zip
-*.tar
-*.rar
-
