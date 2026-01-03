@@ -1,0 +1,50 @@
+---
+title: "Feature Proposal: "
+labels: ["enhancement", "needs-triage"]
+---
+
+## Problem Statement
+
+**What problem are you trying to solve?**
+
+(Describe the current situation and the pain point)
+
+## Proposed Solution
+
+**How do you propose to solve this problem?**
+
+(Describe your proposed solution in detail)
+
+## Alternatives Considered
+
+**What other solutions did you consider?**
+
+- Alternative 1: ...
+- Alternative 2: ...
+
+## Use Cases
+
+**Who will benefit from this feature?**
+
+1. Use case 1: ...
+2. Use case 2: ...
+
+## Implementation Considerations
+
+**What should be considered when implementing this?**
+
+- Technical complexity
+- Breaking changes
+- Performance impact
+- Security implications
+- Documentation needs
+
+## Additional Context
+
+(Add any other context, mockups, or examples)
+
+## Willing to Contribute
+
+- [ ] I am willing to submit a PR to implement this feature
+- [ ] I can help with design/documentation
+- [ ] I can help with testing

@@ -58,6 +58,9 @@ For more details, explore the [PipeCD Documentation](https://pipecd.dev/docs).
 | 🔧 [Development Guide](./DEVELOPMENT_GUIDE.md) | Contributing and development setup |
 | 🧪 [Testing Guide](./TESTING.md) | Writing and running tests |
 | 🐛 [Troubleshooting](./TROUBLESHOOTING.md) | Common issues and solutions |
+| 📖 [API Documentation](./API_DOCUMENTATION.md) | API reference and usage |
+| 🎨 [Code Style](./CODE_STYLE.md) | Coding standards and conventions |
+| 🗺️ [Roadmap](./ROADMAP.md) | Future plans and features |
 | 💬 [Slack Channel](https://cloud-native.slack.com/archives/C01B27F9T0X) | Join the community |
 | 📅 [Community Meetings](https://bit.ly/pipecd-mtg-notes) | Bi-weekly meetings |
 
