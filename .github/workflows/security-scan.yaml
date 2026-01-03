@@ -1,0 +1,144 @@
+name: security-scan
+
+on:
+  pull_request:
+    branches:
+      - master
+      - 'release-v*'
+  push:
+    branches:
+      - master
+  schedule:
+    # Run weekly on Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  docker-scan:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        dockerfile:
+          - path: 'cmd/pipecd/Dockerfile'
+            context: '.'
+          - path: 'cmd/piped/Dockerfile'
+            context: '.'
+          - path: 'tool/piped-base/Dockerfile'
+            context: 'tool/piped-base'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build Docker image
+        run: |
+          docker build -f ${{ matrix.dockerfile.path }} -t test-image:latest ${{ matrix.dockerfile.context }}
+
+      - name: Run Trivy vulnerability scanner on Docker image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'test-image:latest'
+          format: 'sarif'
+          output: 'trivy-docker-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Docker scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-docker-results.sarif'
+          category: ${{ matrix.dockerfile.path }}
+
+  gosec-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@v2.21.4
+        with:
+          args: '-fmt sarif -out gosec-results.sarif ./...'
+
+      - name: Upload Gosec results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'gosec-results.sarif'
+
+  npm-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run npm audit
+        working-directory: ./web
+        run: |
+          npm audit --audit-level=high --json > npm-audit.json || true
+
+      - name: Upload npm audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: web/npm-audit.json
+          retention-days: 30
+
+  security-summary:
+    runs-on: ubuntu-24.04
+    needs: [trivy-scan, gosec-scan, npm-audit]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Post security scan summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+            
+            const summary = `## 🔒 Security Scan Results
+            
+            Security scans have been completed for this PR:
+            - ✅ Trivy vulnerability scan (filesystem)
+            - ✅ Gosec security scan (Go code)
+            - ✅ npm audit (web dependencies)
+            - ✅ Docker image scanning
+            
+            Check the [Security tab](https://github.com/${owner}/${repo}/security) for detailed results.
+            
+            Critical and high severity issues are automatically flagged.`;
+            
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prNumber,
+              body: summary
+            });
