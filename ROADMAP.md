@@ -6,7 +6,7 @@ This document outlines the future direction and planned features for PipeCD. Ite
 
 PipeCD aims to be the most versatile, secure, and developer-friendly GitOps continuous delivery platform for multi-cloud environments.
 
-## Current Status (as of 2026)
+## Current Status (as of 2025)
 
 - ✅ Stable v0.x releases
 - ✅ Support for Kubernetes, Terraform, Cloud Run, Lambda, ECS
@@ -14,7 +14,7 @@ PipeCD aims to be the most versatile, secure, and developer-friendly GitOps cont
 - ✅ Built-in deployment analysis
 - ✅ CNCF Sandbox Project
 
-## Short-term Goals (Q1-Q2 2026)
+## Short-term Goals (Q1-Q2 2025)
 
 ### Enhanced Security
 - [ ] External secret management integration (Vault, AWS Secrets Manager)
@@ -43,7 +43,7 @@ PipeCD aims to be the most versatile, secure, and developer-friendly GitOps cont
 - [ ] Real-time deployment notifications
 - [ ] SLO/SLI tracking
 
-## Mid-term Goals (Q3-Q4 2026)
+## Mid-term Goals (Q3-Q4 2025)
 
 ### Advanced Deployment Strategies
 - [ ] Flagger integration for progressive delivery
@@ -73,7 +73,7 @@ PipeCD aims to be the most versatile, secure, and developer-friendly GitOps cont
 - [ ] Intelligent resource optimization
 - [ ] ChatOps with AI assistance
 
-## Long-term Goals (2027+)
+## Long-term Goals (2026+)
 
 ### Multi-Cluster Management
 - [ ] Federation support
@@ -184,7 +184,7 @@ Requirements for v1.0 release:
 - [ ] Production deployments at scale (>1000 apps)
 - [ ] 6+ months of stable releases
 
-**Estimated timeline**: Q4 2026
+**Estimated timeline**: Q4 2025
 
 ## Release Cadence
 
@@ -225,7 +225,7 @@ We value your feedback on this roadmap!
 
 ---
 
-**Last Updated**: January 2026  
-**Next Review**: March 2026
+**Last Updated**: January 2025  
+**Next Review**: March 2025
 
 *This roadmap is a living document and will be updated regularly based on community feedback and project evolution.*
