@@ -1,0 +1,142 @@
+name: issue-triage-automation
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  triage-new-issue:
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    steps:
+      - name: Auto-label and triage new issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+            const issueNumber = issue.number;
+            const title = issue.title.toLowerCase();
+            const body = issue.body?.toLowerCase() || '';
+            
+            const labels = [];
+            
+            // Auto-detect issue type from title/body
+            if (title.includes('bug') || body.includes('bug')) {
+              labels.push('kind/bug');
+            }
+            if (title.includes('feature') || title.includes('enhancement') || body.includes('feature request')) {
+              labels.push('kind/feature');
+            }
+            if (title.includes('question') || title.includes('help') || title.includes('how to')) {
+              labels.push('kind/question');
+            }
+            if (title.includes('doc') || title.includes('documentation')) {
+              labels.push('kind/documentation');
+            }
+            
+            // Auto-detect area from keywords
+            if (body.includes('kubernetes') || body.includes('k8s')) {
+              labels.push('area/kubernetes');
+            }
+            if (body.includes('terraform')) {
+              labels.push('area/terraform');
+            }
+            if (body.includes('web') || body.includes('ui') || body.includes('frontend')) {
+              labels.push('area/web');
+            }
+            if (body.includes('pipeline') || body.includes('deployment')) {
+              labels.push('area/deployment');
+            }
+            if (body.includes('security') || body.includes('vulnerability') || body.includes('cve')) {
+              labels.push('security');
+            }
+            
+            // Add triage label
+            labels.push('needs-triage');
+            
+            // Add labels
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                labels
+              });
+              
+              console.log(`Auto-labeled issue #${issueNumber} with: ${labels.join(', ')}`);
+            }
+            
+            // Welcome message for first-time contributors
+            const { data: issueCreator } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              creator: issue.user.login,
+              state: 'all'
+            });
+            
+            if (issueCreator.length === 1) {
+              const welcomeComment = `👋 Welcome to PipeCD, @${issue.user.login}!
+
+Thank you for opening your first issue. A maintainer will review this soon.
+
+**While you wait:**
+- Check our [documentation](https://pipecd.dev/docs/)
+- Join our [Slack community](https://cloud-native.slack.com/archives/C01B27F9T0X)
+- Review our [contributing guide](https://github.com/pipe-cd/pipecd/blob/master/CONTRIBUTING.md)
+
+We appreciate your contribution! 🎉`;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: welcomeComment
+              });
+            }
+
+  check-inactive-issues:
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'issue_comment'
+    steps:
+      - name: Remove needs-info label when author responds
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+            const comment = context.payload.comment;
+            
+            // If issue author responds, remove needs-info label
+            if (comment.user.login === issue.user.login) {
+              const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+                owner,
+                repo,
+                issue_number: issue.number
+              });
+              
+              if (labels.some(l => l.name === 'needs-info')) {
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  name: 'needs-info'
+                }).catch(() => {});
+                
+                // Add needs-triage back
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  labels: ['needs-triage']
+                });
+                
+                console.log(`Removed needs-info from issue #${issue.number} after author response`);
+              }
+            }

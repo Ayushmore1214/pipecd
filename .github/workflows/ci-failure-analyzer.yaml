@@ -1,0 +1,164 @@
+name: ci-failure-analyzer
+
+on:
+  workflow_run:
+    workflows: ["build", "test", "lint"]
+    types: [completed]
+
+permissions:
+  actions: read
+  checks: read
+  pull-requests: write
+
+jobs:
+  analyze-failure:
+    runs-on: ubuntu-24.04
+    if: github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Analyze CI failure and comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const workflowRun = context.payload.workflow_run;
+            
+            // Get associated PRs
+            const prs = workflowRun.pull_requests;
+            if (prs.length === 0) {
+              console.log('No PRs associated with this workflow run');
+              return;
+            }
+            
+            const prNumber = prs[0].number;
+            
+            // Get workflow jobs
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: workflowRun.id
+            });
+            
+            const failedJobs = jobs.jobs.filter(job => job.conclusion === 'failure');
+            
+            if (failedJobs.length === 0) {
+              return;
+            }
+            
+            // Analyze failure patterns
+            let failureAnalysis = `## 🔴 CI Failure Analysis\n\n`;
+            failureAnalysis += `Workflow: **${workflowRun.name}**\n`;
+            failureAnalysis += `Failed jobs: **${failedJobs.length}**\n\n`;
+            
+            const failurePatterns = {
+              test: [],
+              lint: [],
+              build: [],
+              timeout: [],
+              dependency: [],
+              other: []
+            };
+            
+            for (const job of failedJobs) {
+              const jobName = job.name.toLowerCase();
+              const steps = job.steps.filter(s => s.conclusion === 'failure');
+              
+              failureAnalysis += `### ❌ ${job.name}\n`;
+              
+              for (const step of steps) {
+                const stepName = step.name.toLowerCase();
+                
+                // Categorize failures
+                if (stepName.includes('test')) {
+                  failurePatterns.test.push({ job: job.name, step: step.name });
+                } else if (stepName.includes('lint') || stepName.includes('format')) {
+                  failurePatterns.lint.push({ job: job.name, step: step.name });
+                } else if (stepName.includes('build') || stepName.includes('compile')) {
+                  failurePatterns.build.push({ job: job.name, step: step.name });
+                } else if (stepName.includes('timeout')) {
+                  failurePatterns.timeout.push({ job: job.name, step: step.name });
+                } else if (stepName.includes('dependencies') || stepName.includes('install')) {
+                  failurePatterns.dependency.push({ job: job.name, step: step.name });
+                } else {
+                  failurePatterns.other.push({ job: job.name, step: step.name });
+                }
+                
+                failureAnalysis += `- Step: \`${step.name}\`\n`;
+              }
+              
+              failureAnalysis += `- [View logs](${job.html_url})\n\n`;
+            }
+            
+            // Add helpful suggestions
+            failureAnalysis += `## 💡 Suggested Actions\n\n`;
+            
+            if (failurePatterns.test.length > 0) {
+              failureAnalysis += `**Test Failures (${failurePatterns.test.length}):**\n`;
+              failureAnalysis += `- Review test output in the logs\n`;
+              failureAnalysis += `- Run tests locally: \`make test\`\n`;
+              failureAnalysis += `- Check for flaky tests\n\n`;
+            }
+            
+            if (failurePatterns.lint.length > 0) {
+              failureAnalysis += `**Linting Issues (${failurePatterns.lint.length}):**\n`;
+              failureAnalysis += `- Run linter locally: \`make lint\`\n`;
+              failureAnalysis += `- Auto-fix where possible: \`make fmt\`\n`;
+              failureAnalysis += `- Review [coding standards](https://github.com/pipe-cd/pipecd/blob/master/CONTRIBUTING.md)\n\n`;
+            }
+            
+            if (failurePatterns.build.length > 0) {
+              failureAnalysis += `**Build Failures (${failurePatterns.build.length}):**\n`;
+              failureAnalysis += `- Build locally: \`make build\`\n`;
+              failureAnalysis += `- Check for compilation errors\n`;
+              failureAnalysis += `- Verify all dependencies are available\n\n`;
+            }
+            
+            if (failurePatterns.dependency.length > 0) {
+              failureAnalysis += `**Dependency Issues (${failurePatterns.dependency.length}):**\n`;
+              failureAnalysis += `- Update dependencies: \`make update/go-deps\` or \`make update/web-deps\`\n`;
+              failureAnalysis += `- Clear caches and retry\n\n`;
+            }
+            
+            if (failurePatterns.timeout.length > 0) {
+              failureAnalysis += `**Timeout Issues (${failurePatterns.timeout.length}):**\n`;
+              failureAnalysis += `- Check for infinite loops or hanging processes\n`;
+              failureAnalysis += `- Review test performance\n\n`;
+            }
+            
+            failureAnalysis += `---\n`;
+            failureAnalysis += `**Quick actions:**\n`;
+            failureAnalysis += `- 🔄 Re-run failed workflows\n`;
+            failureAnalysis += `- 📖 Check [CI troubleshooting guide](https://github.com/pipe-cd/pipecd/blob/master/CONTRIBUTING.md#development)\n`;
+            failureAnalysis += `- 💬 Ask in [Slack](https://cloud-native.slack.com/archives/C01B27F9T0X) if you need help\n`;
+            
+            // Check if we already commented
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: prNumber
+            });
+            
+            const existingComment = comments.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes('CI Failure Analysis') &&
+              c.body.includes(workflowRun.id.toString())
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body: failureAnalysis + `\n\n<sub>Workflow run: ${workflowRun.id}</sub>`
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: failureAnalysis + `\n\n<sub>Workflow run: ${workflowRun.id}</sub>`
+              });
+            }
+            
+            console.log(`Posted failure analysis for PR #${prNumber}`);
