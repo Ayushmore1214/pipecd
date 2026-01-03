@@ -1,0 +1,81 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: '🚀 Features'
+    labels:
+      - 'kind/feature'
+      - 'enhancement'
+      - 'kind/enhancement'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'kind/bug'
+      - 'bug'
+      - 'fix'
+  - title: '📚 Documentation'
+    labels:
+      - 'documentation'
+      - 'docs'
+  - title: '🔒 Security'
+    labels:
+      - 'security'
+  - title: '⚡ Performance'
+    labels:
+      - 'performance'
+  - title: '🧹 Maintenance'
+    labels:
+      - 'chore'
+      - 'dependencies'
+      - 'refactor'
+
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  major:
+    labels:
+      - 'major'
+      - 'breaking'
+  minor:
+    labels:
+      - 'minor'
+      - 'kind/feature'
+  patch:
+    labels:
+      - 'patch'
+      - 'kind/bug'
+  default: patch
+
+exclude-labels:
+  - 'skip-changelog'
+  - 'not-auto-close'
+
+autolabeler:
+  - label: 'documentation'
+    files:
+      - '*.md'
+      - 'docs/**/*'
+  - label: 'kind/bug'
+    branch:
+      - '/fix\/.+/'
+    title:
+      - '/fix/i'
+  - label: 'kind/feature'
+    branch:
+      - '/feat(ure)?\/.+/'
+    title:
+      - '/feat(ure)?/i'
+  - label: 'dependencies'
+    files:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'yarn.lock'
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

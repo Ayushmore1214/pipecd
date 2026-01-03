@@ -1,0 +1,65 @@
+name: release-notes
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  generate-release-notes:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Notes
+        id: generate_notes
+        uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+          publish: true
+          tag: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id
+            });
+
+            const body = `${{ steps.generate_notes.outputs.body }}
+
+            ## Installation
+
+            ### Helm Chart
+            \`\`\`bash
+            helm repo add pipecd https://charts.pipecd.dev
+            helm repo update
+            helm install pipecd pipecd/pipecd --version ${{ github.event.release.tag_name }}
+            \`\`\`
+
+            ### Binary Downloads
+            - [Linux AMD64](https://github.com/pipe-cd/pipecd/releases/download/${{ github.event.release.tag_name }}/pipecd_linux_amd64.tar.gz)
+            - [Linux ARM64](https://github.com/pipe-cd/pipecd/releases/download/${{ github.event.release.tag_name }}/pipecd_linux_arm64.tar.gz)
+            - [macOS AMD64](https://github.com/pipe-cd/pipecd/releases/download/${{ github.event.release.tag_name }}/pipecd_darwin_amd64.tar.gz)
+            - [macOS ARM64](https://github.com/pipe-cd/pipecd/releases/download/${{ github.event.release.tag_name }}/pipecd_darwin_arm64.tar.gz)
+
+            ## What's Changed
+            ${release.body || ''}
+            `;
+
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              body: body
+            });

@@ -1,0 +1,52 @@
+name: update-actions
+
+on:
+  schedule:
+    # Run monthly on the first day at 00:00 UTC
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-actions:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Update GitHub Actions
+        id: update
+        run: |
+          # This is a placeholder for automated action updates
+          # In production, you would use a tool like Renovate or Dependabot
+          echo "Actions are managed by Dependabot"
+          echo "updated=false" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.update.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore(deps): update GitHub Actions'
+          title: 'chore(deps): Update GitHub Actions to latest versions'
+          body: |
+            ## Description
+            
+            This PR updates GitHub Actions to their latest versions.
+            
+            ## Changes
+            - Updated actions to latest stable versions
+            - Maintained compatibility with existing workflows
+            
+            ## Testing
+            - [ ] All workflows pass with updated actions
+            - [ ] No breaking changes detected
+          branch: update-actions
+          delete-branch: true
+          labels: |
+            dependencies
+            github-actions
+            automated
