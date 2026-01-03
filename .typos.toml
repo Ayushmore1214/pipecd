@@ -1,0 +1,35 @@
+# Configuration for typos spell checker
+# See https://github.com/crate-ci/typos
+
+[default]
+extend-ignore-re = [
+  # Ignore git SHAs
+  "[0-9a-f]{7,40}",
+  # Ignore base64 encoded strings
+  "[A-Za-z0-9+/]{20,}={0,2}",
+]
+
+[files]
+extend-exclude = [
+  "*.sum",
+  "*.lock",
+  "package-lock.json",
+  "yarn.lock",
+  ".artifacts/",
+  "vendor/",
+  "node_modules/",
+  "web/build/",
+  "docs/public/",
+]
+
+[default.extend-words]
+# Add project-specific words that are not typos
+pipecd = "pipecd"
+piped = "piped"
+pipectl = "pipectl"
+kubectl = "kubectl"
+kubernetes = "kubernetes"
+kubeconfig = "kubeconfig"
+gRPC = "gRPC"
+GitOps = "GitOps"
+CNCF = "CNCF"

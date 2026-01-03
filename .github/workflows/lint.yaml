@@ -10,6 +10,11 @@ on:
       - "release-v*"
       - "feat/*"
 
+# Cancel in-progress runs for the same workflow and ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GO_VERSION: 1.25.0
   NODE_VERSION: 18.12.0
