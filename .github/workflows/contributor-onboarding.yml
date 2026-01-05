@@ -1,0 +1,72 @@
+name: Contributor Onboarding Bot
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  welcome-first-time-contributor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if first-time contributor
+        id: contributor
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const author = context.payload.pull_request.user.login;
+
+            // Get all PRs by this user in this repo
+            const pulls = await github.paginate(
+              github.rest.pulls.list,
+              {
+                owner,
+                repo,
+                state: "all",
+                creator: author,
+                per_page: 100,
+              }
+            );
+
+            // If this is their first PR, total will be 1
+            const isFirstTime = pulls.length === 1;
+
+            core.setOutput("first_time", isFirstTime.toString());
+
+      - name: Post welcome comment
+        if: steps.contributor.outputs.first_time == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+
+            const message = `
+👋 **Welcome to PipeCD!**
+
+Thanks for opening your first pull request — we're happy to have you here 🎉
+
+To help you get through CI smoothly, here are a few useful resources:
+
+### 🔧 CI & Development
+- 📘 **Contributing.md:** https://github.com/Ayushmore1214/pipecd?tab=contributing-ov-file#contributing-to-pipecd
+- 🧪 **Run tests locally:** \`make test\`
+- 🧹 **Lint checks:** \`make lint\`
+
+
+If something is unclear or CI fails unexpectedly, feel free to ask — we're here to help.
+
+Thanks for contributing ❤️  
+— PipeCD Maintainers
+`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: message,
+            });
