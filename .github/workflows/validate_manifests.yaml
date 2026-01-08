@@ -12,6 +12,8 @@ on:
 env:
   HELM_VERSION: 3.17.3
   KUBECONFORM_VERSION: 0.6.4
+  # Kubernetes version to validate against. Update this when PipeCD drops support for older versions.
+  KUBERNETES_VERSION: 1.30.0
 
 permissions:
   contents: read
@@ -100,7 +102,7 @@ jobs:
             if kubeconform \
               -summary \
               -output text \
-              -kubernetes-version 1.29.0 \
+              -kubernetes-version ${{ env.KUBERNETES_VERSION }} \
               -skip CustomResourceDefinition \
               -ignore-missing-schemas \
               /tmp/rendered.yaml 2>&1 | tee /tmp/validate-output.txt; then

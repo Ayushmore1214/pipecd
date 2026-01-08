@@ -28,10 +28,12 @@ jobs:
           hugo-version: '0.148.2'
           extended: true
 
+      # Note: Using Node 18 for security updates. If docs build fails, 
+      # consider matching publish_site.yaml which uses Node 14 for Hugo compatibility.
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: '14'
+          node-version: '18'
 
       - name: Build site
         run: |
