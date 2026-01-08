@@ -1,0 +1,181 @@
+name: docs_links
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'docs/**'
+  schedule:
+    # Run weekly on Sundays at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-links:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@75d2e84710de30f6ff7268e08f310b60ef14033f # v3.0.0
+        with:
+          hugo-version: '0.148.2'
+          extended: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
+
+      - name: Build site
+        run: |
+          cd docs
+          npm install autoprefixer
+          npm install postcss-cli
+          env HUGO_ENV="production" RELEASE="$(grep '^tag:' ../RELEASE | awk '{print $2}')" hugo
+
+      - name: Install lychee
+        run: |
+          curl -sLO https://github.com/lycheeverse/lychee/releases/download/v0.15.1/lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz
+          chmod +x lychee
+          sudo mv lychee /usr/local/bin/
+
+      - name: Check internal links
+        id: internal-links
+        continue-on-error: true
+        run: |
+          cd docs/public
+          
+          # Check internal links only (faster, more reliable)
+          lychee \
+            --no-progress \
+            --format markdown \
+            --output /tmp/internal-links-report.md \
+            --exclude-path 'fonts' \
+            --exclude-path 'images' \
+            --exclude-path 'css' \
+            --exclude-path 'js' \
+            --exclude '^https?://' \
+            --include-verbatim \
+            --base '.' \
+            '**/*.html' || echo "has_broken_internal=true" >> $GITHUB_OUTPUT
+          
+          if [ -f /tmp/internal-links-report.md ]; then
+            cat /tmp/internal-links-report.md
+          fi
+
+      - name: Check external links
+        id: external-links
+        continue-on-error: true
+        run: |
+          cd docs/public
+          
+          # Check external links with rate limiting and caching
+          lychee \
+            --no-progress \
+            --format markdown \
+            --output /tmp/external-links-report.md \
+            --exclude-path 'fonts' \
+            --exclude-path 'images' \
+            --exclude-path 'css' \
+            --exclude-path 'js' \
+            --exclude 'localhost' \
+            --exclude '127.0.0.1' \
+            --exclude 'example.com' \
+            --exclude 'YOUR_' \
+            --exclude '<YOUR_' \
+            --exclude 'ghcr.io' \
+            --exclude 'gcr.io' \
+            --exclude 'twitter.com' \
+            --exclude 'x.com' \
+            --timeout 30 \
+            --max-retries 2 \
+            --max-concurrency 5 \
+            --cache \
+            --max-cache-age 1d \
+            '**/*.html' || echo "has_broken_external=true" >> $GITHUB_OUTPUT
+          
+          if [ -f /tmp/external-links-report.md ]; then
+            cat /tmp/external-links-report.md
+          fi
+
+      - name: Post results comment
+        if: github.event_name == 'pull_request' && (steps.internal-links.outputs.has_broken_internal == 'true' || steps.external-links.outputs.has_broken_external == 'true')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let internalReport = '';
+            let externalReport = '';
+            
+            try {
+              internalReport = fs.readFileSync('/tmp/internal-links-report.md', 'utf8');
+            } catch (e) {
+              internalReport = 'No internal link issues found.';
+            }
+            
+            try {
+              externalReport = fs.readFileSync('/tmp/external-links-report.md', 'utf8');
+            } catch (e) {
+              externalReport = 'No external link issues found.';
+            }
+            
+            const hasBrokenInternal = '${{ steps.internal-links.outputs.has_broken_internal }}' === 'true';
+            const hasBrokenExternal = '${{ steps.external-links.outputs.has_broken_external }}' === 'true';
+            
+            let body = `## 🔗 Documentation Link Check Results\n\n`;
+            
+            if (hasBrokenInternal) {
+              body += `### ❌ Internal Links\n\nThe following internal links are broken and should be fixed:\n\n`;
+              body += `<details>\n<summary>Click to expand internal link report</summary>\n\n${internalReport}\n</details>\n\n`;
+            }
+            
+            if (hasBrokenExternal) {
+              body += `### ⚠️ External Links\n\nThe following external links may be broken (please verify manually):\n\n`;
+              body += `<details>\n<summary>Click to expand external link report</summary>\n\n${externalReport}\n</details>\n\n`;
+              body += `> Note: Some external link failures may be due to rate limiting or temporary issues.\n\n`;
+            }
+            
+            body += `---\n*Run \`make run/site\` locally to test documentation changes.*`;
+            
+            // Check for existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Documentation Link Check')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Fail on broken internal links
+        if: steps.internal-links.outputs.has_broken_internal == 'true'
+        run: |
+          echo "::error::Broken internal links detected in documentation"
+          exit 1

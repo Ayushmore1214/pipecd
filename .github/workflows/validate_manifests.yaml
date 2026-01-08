@@ -1,0 +1,239 @@
+name: validate_manifests
+
+on:
+  pull_request:
+    branches:
+      - master
+      - 'release-v*'
+    paths:
+      - 'manifests/**'
+      - 'quickstart/**'
+
+env:
+  HELM_VERSION: 3.17.3
+  KUBECONFORM_VERSION: 0.6.4
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install kubeconform
+        run: |
+          curl -sLO https://github.com/yannh/kubeconform/releases/download/v${{ env.KUBECONFORM_VERSION }}/kubeconform-linux-amd64.tar.gz
+          tar xzf kubeconform-linux-amd64.tar.gz
+          chmod +x kubeconform
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Lint Helm charts
+        id: helm-lint
+        continue-on-error: true
+        run: |
+          echo "## Helm Lint Results" > /tmp/helm-lint-report.md
+          echo "" >> /tmp/helm-lint-report.md
+          
+          LINT_FAILED=false
+          
+          for dir in $(find ./manifests -mindepth 1 -maxdepth 1 -type d); do
+            CHART_NAME=$(basename "$dir")
+            echo "Linting chart: $CHART_NAME"
+            
+            if helm lint "$dir" 2>&1 | tee /tmp/lint-output.txt; then
+              echo "- ✅ **$CHART_NAME**: Passed" >> /tmp/helm-lint-report.md
+            else
+              echo "- ❌ **$CHART_NAME**: Failed" >> /tmp/helm-lint-report.md
+              echo '```' >> /tmp/helm-lint-report.md
+              cat /tmp/lint-output.txt >> /tmp/helm-lint-report.md
+              echo '```' >> /tmp/helm-lint-report.md
+              LINT_FAILED=true
+            fi
+          done
+          
+          if [ "$LINT_FAILED" = true ]; then
+            echo "lint_failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "lint_failed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Template and validate Helm charts
+        id: helm-template
+        continue-on-error: true
+        run: |
+          echo "## Kubernetes API Validation Results" > /tmp/kubeconform-report.md
+          echo "" >> /tmp/kubeconform-report.md
+          
+          VALIDATION_FAILED=false
+          
+          for dir in $(find ./manifests -mindepth 1 -maxdepth 1 -type d); do
+            CHART_NAME=$(basename "$dir")
+            echo "Validating chart: $CHART_NAME"
+            
+            # Skip charts that don't produce Kubernetes resources
+            if [ "$CHART_NAME" = "site" ]; then
+              echo "- ⏭️ **$CHART_NAME**: Skipped (not a Kubernetes workload)" >> /tmp/kubeconform-report.md
+              continue
+            fi
+            
+            # Template the chart
+            if ! helm template "$CHART_NAME" "$dir" --dependency-update > /tmp/rendered.yaml 2>/tmp/template-error.txt; then
+              echo "- ❌ **$CHART_NAME**: Template failed" >> /tmp/kubeconform-report.md
+              echo '```' >> /tmp/kubeconform-report.md
+              cat /tmp/template-error.txt >> /tmp/kubeconform-report.md
+              echo '```' >> /tmp/kubeconform-report.md
+              VALIDATION_FAILED=true
+              continue
+            fi
+            
+            # Validate against Kubernetes schemas
+            if kubeconform \
+              -summary \
+              -output text \
+              -kubernetes-version 1.29.0 \
+              -skip CustomResourceDefinition \
+              -ignore-missing-schemas \
+              /tmp/rendered.yaml 2>&1 | tee /tmp/validate-output.txt; then
+              echo "- ✅ **$CHART_NAME**: Valid Kubernetes manifests" >> /tmp/kubeconform-report.md
+            else
+              echo "- ❌ **$CHART_NAME**: Validation failed" >> /tmp/kubeconform-report.md
+              echo '```' >> /tmp/kubeconform-report.md
+              cat /tmp/validate-output.txt >> /tmp/kubeconform-report.md
+              echo '```' >> /tmp/kubeconform-report.md
+              VALIDATION_FAILED=true
+            fi
+          done
+          
+          if [ "$VALIDATION_FAILED" = true ]; then
+            echo "validation_failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "validation_failed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for deprecated APIs
+        id: deprecated-apis
+        run: |
+          echo "## Deprecated API Check" > /tmp/deprecated-report.md
+          echo "" >> /tmp/deprecated-report.md
+          
+          # Common deprecated APIs to check for
+          DEPRECATED_PATTERNS=(
+            "apiVersion: extensions/v1beta1"
+            "apiVersion: apps/v1beta1"
+            "apiVersion: apps/v1beta2"
+            "apiVersion: networking.k8s.io/v1beta1"
+            "apiVersion: policy/v1beta1"
+            "apiVersion: rbac.authorization.k8s.io/v1beta1"
+          )
+          
+          FOUND_DEPRECATED=false
+          
+          for pattern in "${DEPRECATED_PATTERNS[@]}"; do
+            if grep -r "$pattern" manifests/ --include="*.yaml" --include="*.tpl" 2>/dev/null | head -5; then
+              echo "- ⚠️ Found deprecated: \`$pattern\`" >> /tmp/deprecated-report.md
+              FOUND_DEPRECATED=true
+            fi
+          done
+          
+          if [ "$FOUND_DEPRECATED" = true ]; then
+            echo "" >> /tmp/deprecated-report.md
+            echo "> Consider updating to stable API versions for better Kubernetes compatibility." >> /tmp/deprecated-report.md
+            echo "deprecated_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "- ✅ No deprecated Kubernetes APIs detected" >> /tmp/deprecated-report.md
+            echo "deprecated_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post validation results
+        if: always() && (steps.helm-lint.outputs.lint_failed == 'true' || steps.helm-template.outputs.validation_failed == 'true' || steps.deprecated-apis.outputs.deprecated_found == 'true')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let helmReport = '';
+            let kubeconformReport = '';
+            let deprecatedReport = '';
+            
+            try {
+              helmReport = fs.readFileSync('/tmp/helm-lint-report.md', 'utf8');
+            } catch (e) {}
+            
+            try {
+              kubeconformReport = fs.readFileSync('/tmp/kubeconform-report.md', 'utf8');
+            } catch (e) {}
+            
+            try {
+              deprecatedReport = fs.readFileSync('/tmp/deprecated-report.md', 'utf8');
+            } catch (e) {}
+            
+            const lintFailed = '${{ steps.helm-lint.outputs.lint_failed }}' === 'true';
+            const validationFailed = '${{ steps.helm-template.outputs.validation_failed }}' === 'true';
+            const deprecatedFound = '${{ steps.deprecated-apis.outputs.deprecated_found }}' === 'true';
+            
+            let body = `## ⎈ Manifest Validation Results\n\n`;
+            
+            if (lintFailed) {
+              body += `### ❌ Helm Lint Issues\n\n${helmReport}\n\n`;
+            }
+            
+            if (validationFailed) {
+              body += `### ❌ Kubernetes Validation Issues\n\n${kubeconformReport}\n\n`;
+            }
+            
+            if (deprecatedFound) {
+              body += `### ⚠️ Deprecated APIs\n\n${deprecatedReport}\n\n`;
+            }
+            
+            if (!lintFailed && !validationFailed) {
+              body += `✅ All Helm charts passed linting and Kubernetes validation.\n\n`;
+              if (deprecatedFound) {
+                body += deprecatedReport + '\n\n';
+              }
+            }
+            
+            body += `---\n*Run \`make lint/helm\` locally to validate Helm charts.*`;
+            
+            // Check for existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Manifest Validation Results')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Fail on critical issues
+        if: steps.helm-lint.outputs.lint_failed == 'true' || steps.helm-template.outputs.validation_failed == 'true'
+        run: |
+          echo "::error::Manifest validation failed. Please fix the issues above."
+          exit 1
