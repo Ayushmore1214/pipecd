@@ -100,12 +100,8 @@ func updateECSService(ctx context.Context, client ecsClient, opts ECSDeployStage
 		if output.Service.TaskDefinition != nil {
 			lp.Infof("  New Task Definition: %s", *output.Service.TaskDefinition)
 		}
-		if output.Service.DesiredCount != 0 {
-			lp.Infof("  Desired Count: %d", output.Service.DesiredCount)
-		}
-		if output.Service.RunningCount != 0 {
-			lp.Infof("  Running Count: %d", output.Service.RunningCount)
-		}
+		lp.Infof("  Desired Count: %d", output.Service.DesiredCount)
+		lp.Infof("  Running Count: %d", output.Service.RunningCount)
 	}
 
 	return nil
