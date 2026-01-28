@@ -35,4 +35,5 @@ jobs:
             For details, see https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs.
           delete-branch: true
           signoff: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }} // to add gontributor to the relaese 
+          
