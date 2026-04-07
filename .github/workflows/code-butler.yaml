@@ -1,32 +1,43 @@
-name: code_butler
-
-permissions:
-  contents: read
-  pull-requests: write
+name: code-butler
 
 on:
-  issue_comment:
-    types: [created]
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  review:
-    if: startsWith(github.event.comment.body, '/review')
-    runs-on: ubuntu-24.04
+  butler:
+    runs-on: ubuntu-latest
+    
     steps:
-      - uses: ca-dp/code-butler@v1
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          cmd: review
-          model: gpt-4-1106-preview
-  chat:
-    if: startsWith(github.event.comment.body, '/chat')
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: ca-dp/code-butler@v1
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          cmd: chat
-          model: gpt-4-1106-preview
-          comment_body: ${{ github.event.comment.body }}
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run Code Butler
+        run: make butler
+
+      - name: Commit and Push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: code-butler automated cleanup"
+          branch: ${{ github.head_ref }}
+          commit_user_name: "pipecd-bot"
+          commit_user_email: "pipecd-bot@users.noreply.github.com"
