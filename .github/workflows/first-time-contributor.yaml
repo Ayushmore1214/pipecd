@@ -5,11 +5,13 @@ on:
     types: [opened]
 
 permissions:
-  pull-requests: write
+  contents: read
+  issues: write
+  pull-requests: read
 
 jobs:
   welcome:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Welcome first-time contributor
         uses: actions/github-script@v7
@@ -34,6 +36,13 @@ jobs:
               console.log(`User ${prAuthor} is not a first-time contributor.`);
               return;
             }
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: prNumber,
+              labels: ["first-time-contributor"],
+            });
 
             const body = `👋 Hi @${prAuthor}, welcome to **PipeCD** and thanks for opening your first pull request!
             

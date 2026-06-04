@@ -1,9 +1,27 @@
 name: codeql
 
 on:
+  pull_request:
+    branches:
+      - master
+      - 'release-v*'
+      - 'feat/*'
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'web/**'
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/yarn.lock'
+      - '.github/workflows/codeql-analysis.yaml'
   workflow_dispatch:
   schedule:
     - cron: '00 10 * * 1'
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
 
 jobs:
   analyze:
