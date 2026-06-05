@@ -1,0 +1,22 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-24.04
+    env:
+      COPILOT_AGENT_MODEL: sweagent-capi:gpt-5-mini
+    steps:
+      - name: Confirm Copilot model override
+        run: echo "Using COPILOT_AGENT_MODEL=$COPILOT_AGENT_MODEL"

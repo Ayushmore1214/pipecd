@@ -5,18 +5,15 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 env:
   GO_VERSION: 1.25.0
 
 jobs:
-  gh_release:
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo "not implemented"
-
   binary:
     runs-on: ubuntu-24.04
-    needs: gh_release
     permissions:
       contents: write
     steps:

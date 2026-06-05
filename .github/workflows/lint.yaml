@@ -9,9 +9,25 @@ on:
       - master
       - "release-v*"
       - "feat/*"
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'web/**'
+      - 'manifests/**'
+      - 'charts/**'
+      - 'tool/**'
+      - 'hack/**'
+      - '.github/workflows/lint.yaml'
+      - 'Makefile'
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/yarn.lock'
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   GO_VERSION: 1.25.0
@@ -20,8 +36,39 @@ env:
   HELM_VERSION: 3.17.3
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      web: ${{ steps.filter.outputs.web }}
+      helm: ${{ steps.filter.outputs.helm }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'cmd/**'
+              - 'pkg/**'
+              - '**/go.mod'
+              - '**/go.sum'
+            web:
+              - 'web/**'
+              - '**/yarn.lock'
+            helm:
+              - 'manifests/**'
+              - 'charts/**'
+            ci:
+              - '.github/workflows/lint.yaml'
+              - 'Makefile'
+              - 'hack/**'
+
   list-go-modules:
     runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.ci == 'true'
     outputs:
       modules: ${{ steps.list-go-modules.outputs.modules }}
     steps:
@@ -69,6 +116,8 @@ jobs:
 
   web:
     runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@v3
@@ -90,6 +139,8 @@ jobs:
         run: make lint/web
   helm:
     runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.helm == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
