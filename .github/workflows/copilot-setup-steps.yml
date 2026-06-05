@@ -14,7 +14,9 @@ permissions:
 
 jobs:
   copilot-setup-steps:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      COPILOT_AGENT_MODEL: sweagent-capi:gpt-5-mini
     steps:
-      - name: Select supported Copilot model
-        run: echo "COPILOT_AGENT_MODEL=sweagent-capi:gpt-5-mini" >> "$GITHUB_ENV"
+      - name: Confirm Copilot model override
+        run: echo "Using COPILOT_AGENT_MODEL=$COPILOT_AGENT_MODEL"
