@@ -15,6 +15,7 @@ env:
 jobs:
   artifacts:
     runs-on: oracle-vm-8cpu-32gb-x86-64
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write

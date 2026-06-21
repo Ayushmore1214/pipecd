@@ -7,9 +7,15 @@ on:
         description: 'release version (e.g. v0.48.1)'
         required: true
         type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   tool:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

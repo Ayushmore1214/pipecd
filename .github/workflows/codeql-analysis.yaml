@@ -5,9 +5,15 @@ on:
   schedule:
     - cron: '00 10 * * 1'
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   analyze:
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
 
     strategy:
       fail-fast: false
