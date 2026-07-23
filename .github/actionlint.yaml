@@ -1,0 +1,6 @@
+# Configuration for actionlint (https://github.com/rhysd/actionlint).
+# Declares the custom self-hosted runner labels used in this repository so that
+# actionlint does not report them as unknown runner labels.
+self-hosted-runner:
+  labels:
+    - oracle-vm-8cpu-32gb-x86-64
