@@ -29,7 +29,7 @@ jobs:
           hugo-version: '0.148.2'
           extended: true
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
 
@@ -60,7 +60,7 @@ jobs:
 
       # Building and pushing Helm charts.
       - name: Install helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: ${{ env.HELM_VERSION }}
       - name: Login to OCI using Helm
