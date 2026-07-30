@@ -1,0 +1,184 @@
+name: validate_examples
+
+on:
+  pull_request:
+    branches:
+      - master
+      - 'release-v*'
+    paths:
+      - 'examples/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate PipeCD application configs
+        id: validate
+        run: |
+          echo "Validating PipeCD application configuration files..."
+          
+          ERRORS=""
+          WARNINGS=""
+          VALID_COUNT=0
+          
+          # Find all app.pipecd.yaml files
+          while IFS= read -r -d '' file; do
+            echo "Checking: $file"
+            
+            # Check YAML syntax
+            if ! yq eval '.' "$file" > /dev/null 2>&1; then
+              ERRORS="${ERRORS}
+          - \`$file\`: Invalid YAML syntax"
+              continue
+            fi
+            
+            # Check apiVersion
+            API_VERSION=$(yq eval '.apiVersion' "$file" 2>/dev/null)
+            if [[ "$API_VERSION" != "pipecd.dev/v1beta1" ]]; then
+              ERRORS="${ERRORS}
+          - \`$file\`: Invalid or missing apiVersion (found: '$API_VERSION', expected: 'pipecd.dev/v1beta1')"
+              continue
+            fi
+            
+            # Check kind
+            KIND=$(yq eval '.kind' "$file" 2>/dev/null)
+            VALID_KINDS="KubernetesApp|CloudRunApp|LambdaApp|TerraformApp|ECSApp"
+            if [[ ! "$KIND" =~ ^($VALID_KINDS)$ ]]; then
+              ERRORS="${ERRORS}
+          - \`$file\`: Invalid or missing kind (found: '$KIND')"
+              continue
+            fi
+            
+            # Check spec.name exists
+            SPEC_NAME=$(yq eval '.spec.name' "$file" 2>/dev/null)
+            if [[ "$SPEC_NAME" == "null" || -z "$SPEC_NAME" ]]; then
+              ERRORS="${ERRORS}
+          - \`$file\`: Missing required field 'spec.name'"
+              continue
+            fi
+            
+            # Check for description (warning only)
+            DESCRIPTION=$(yq eval '.spec.description' "$file" 2>/dev/null)
+            if [[ "$DESCRIPTION" == "null" || -z "$DESCRIPTION" ]]; then
+              WARNINGS="${WARNINGS}
+          - \`$file\`: Consider adding a 'spec.description' field for better documentation"
+            fi
+            
+            VALID_COUNT=$((VALID_COUNT + 1))
+            echo "  ✓ Valid"
+            
+          done < <(find examples -name "app.pipecd.yaml" -print0)
+          
+          echo ""
+          echo "=== Validation Summary ==="
+          echo "Valid configs: $VALID_COUNT"
+          
+          if [[ -n "$WARNINGS" ]]; then
+            echo ""
+            echo "Warnings (non-blocking):$WARNINGS"
+            echo "has_warnings=true" >> $GITHUB_OUTPUT
+            echo "warnings<<EOF" >> $GITHUB_OUTPUT
+            echo "$WARNINGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_warnings=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ -n "$ERRORS" ]]; then
+            echo ""
+            echo "Errors:$ERRORS"
+            echo "has_errors=true" >> $GITHUB_OUTPUT
+            echo "errors<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERRORS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "has_errors=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "All example configurations are valid!"
+          fi
+
+      - name: Post validation results
+        if: always() && (steps.validate.outputs.has_errors == 'true' || steps.validate.outputs.has_warnings == 'true')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const hasErrors = '${{ steps.validate.outputs.has_errors }}' === 'true';
+            const hasWarnings = '${{ steps.validate.outputs.has_warnings }}' === 'true';
+            const errors = `${{ steps.validate.outputs.errors }}`;
+            const warnings = `${{ steps.validate.outputs.warnings }}`;
+            
+            let body = '';
+            
+            if (hasErrors) {
+              body = `## ❌ Example Configuration Validation Failed
+            
+            The following PipeCD application configurations have errors:
+            ${errors}
+            
+            ### How to fix
+            
+            Each \`app.pipecd.yaml\` file should follow this structure:
+            \`\`\`yaml
+            apiVersion: pipecd.dev/v1beta1
+            kind: KubernetesApp  # or CloudRunApp, LambdaApp, TerraformApp, ECSApp
+            spec:
+              name: your-app-name
+              labels:
+                env: example
+              # ... other configuration
+            \`\`\`
+            
+            See the [Configuration Reference](https://pipecd.dev/docs/user-guide/configuration-reference/) for more details.
+            `;
+            } else if (hasWarnings) {
+              body = `## ⚠️ Example Configuration Suggestions
+            
+            The example configurations are valid, but consider these improvements:
+            ${warnings}
+            
+            Adding descriptions helps users understand the purpose of each example.
+            `;
+            }
+            
+            if (body) {
+              // Check for existing comment
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+              
+              const botComment = comments.data.find(comment => 
+                comment.user.type === 'Bot' && 
+                (comment.body.includes('Example Configuration Validation') || comment.body.includes('Example Configuration Suggestions'))
+              );
+              
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: body
+                });
+              }
+            }

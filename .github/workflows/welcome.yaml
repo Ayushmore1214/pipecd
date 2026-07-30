@@ -1,0 +1,108 @@
+name: welcome
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check if first-time contributor
+        id: check-first-time
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const creator = context.payload.pull_request.user.login;
+            
+            // Check for previous PRs by this user
+            const { data: pullRequests } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              per_page: 100,
+            });
+            
+            const previousPRs = pullRequests.filter(pr => 
+              pr.user.login === creator && 
+              pr.number !== context.issue.number
+            );
+            
+            const isFirstTime = previousPRs.length === 0;
+            console.log(`User ${creator} has ${previousPRs.length} previous PRs. First time: ${isFirstTime}`);
+            
+            return isFirstTime;
+          result-encoding: string
+
+      - name: Post welcome message
+        if: steps.check-first-time.outputs.result == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const welcomeMessage = `## 👋 Welcome to PipeCD!
+            
+            Thank you for your first contribution to PipeCD! We're excited to have you here.
+            
+            ### Before your PR can be merged
+            
+            Please make sure you've addressed the following:
+            
+            #### ✅ DCO Sign-off
+            All commits must be signed off with \`git commit -s\` to comply with the [Developer Certificate of Origin](https://developercertificate.org/). If you haven't done this, you can fix it with:
+            \`\`\`bash
+            git rebase --signoff origin/master
+            git push --force-with-lease
+            \`\`\`
+            
+            #### ✅ Run pre-commit checks
+            Before pushing, run the following command to ensure your changes pass all checks:
+            \`\`\`bash
+            make check
+            \`\`\`
+            
+            #### ✅ Complete the PR description
+            Please fill out all sections in the PR template, especially:
+            - **What this PR does**: A clear description of your changes
+            - **Why we need it**: The motivation behind your changes
+            - **Which issue(s) this PR fixes**: Link to the related issue if applicable
+            
+            ### Helpful resources
+            
+            - 📖 [Contributing Guide](https://github.com/pipe-cd/pipecd/blob/master/CONTRIBUTING.md)
+            - 💬 [CNCF Slack #pipecd channel](https://cloud-native.slack.com/archives/C01B27F9T0X)
+            - 📚 [Development Setup](https://github.com/pipe-cd/pipecd/blob/master/CONTRIBUTING.md#development)
+            - 🎥 [Community Meetings](https://bit.ly/pipecd-mtg-notes)
+            
+            If you have any questions, feel free to ask here or on our Slack channel. We're happy to help!
+            
+            ---
+            *This is an automated message for first-time contributors.*
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: welcomeMessage
+            });
+
+      - name: Add first-contribution label
+        if: steps.check-first-time.outputs.result == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['first-contribution']
+              });
+            } catch (error) {
+              // Label might not exist, that's okay
+              console.log('Could not add label:', error.message);
+            }

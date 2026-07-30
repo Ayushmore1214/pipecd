@@ -1,0 +1,168 @@
+name: pr_summary
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  summarize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+            
+            // Categorize files by area
+            const areas = {
+              go: { files: [], label: '🔧 Go Code', paths: ['cmd/', 'pkg/'] },
+              web: { files: [], label: '🌐 Web UI', paths: ['web/'] },
+              docs: { files: [], label: '📚 Documentation', paths: ['docs/'] },
+              examples: { files: [], label: '📝 Examples', paths: ['examples/'] },
+              manifests: { files: [], label: '⎈ Helm/Manifests', paths: ['manifests/'] },
+              ci: { files: [], label: '🔄 CI/Build', paths: ['.github/', 'hack/', 'Makefile'] },
+              config: { files: [], label: '⚙️ Configuration', paths: ['.golangci', 'codecov', '.gitignore'] },
+              tool: { files: [], label: '🛠️ Tools', paths: ['tool/'] },
+              test: { files: [], label: '🧪 Tests', paths: ['test/'] },
+              other: { files: [], label: '📦 Other', paths: [] }
+            };
+            
+            for (const file of files) {
+              let categorized = false;
+              for (const [area, config] of Object.entries(areas)) {
+                if (area === 'other') continue;
+                for (const path of config.paths) {
+                  if (file.filename.startsWith(path) || file.filename.includes(path)) {
+                    config.files.push(file);
+                    categorized = true;
+                    break;
+                  }
+                }
+                if (categorized) break;
+              }
+              if (!categorized) {
+                areas.other.files.push(file);
+              }
+            }
+            
+            // Calculate stats
+            const stats = {
+              totalFiles: files.length,
+              totalAdditions: files.reduce((sum, f) => sum + f.additions, 0),
+              totalDeletions: files.reduce((sum, f) => sum + f.deletions, 0)
+            };
+            
+            // Build summary
+            const affectedAreas = Object.entries(areas)
+              .filter(([_, config]) => config.files.length > 0)
+              .map(([area, config]) => ({
+                area,
+                label: config.label,
+                count: config.files.length,
+                additions: config.files.reduce((sum, f) => sum + f.additions, 0),
+                deletions: config.files.reduce((sum, f) => sum + f.deletions, 0)
+              }));
+            
+            core.setOutput('stats', JSON.stringify(stats));
+            core.setOutput('areas', JSON.stringify(affectedAreas));
+            core.setOutput('total_files', stats.totalFiles);
+            
+            return { stats, affectedAreas };
+
+      - name: Post summary comment
+        if: steps.changed-files.outputs.total_files > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const stats = JSON.parse('${{ steps.changed-files.outputs.stats }}');
+            const areas = JSON.parse('${{ steps.changed-files.outputs.areas }}');
+            
+            // Only post if there are significant changes or multiple areas
+            if (areas.length <= 1 && stats.totalFiles < 5) {
+              console.log('Small single-area PR, skipping summary');
+              return;
+            }
+            
+            let body = `## 📊 PR Change Summary\n\n`;
+            body += `**${stats.totalFiles}** files changed with **+${stats.totalAdditions}** additions and **-${stats.totalDeletions}** deletions\n\n`;
+            
+            body += `### Affected Areas\n\n`;
+            body += `| Area | Files | Changes |\n`;
+            body += `|------|-------|--------|\n`;
+            
+            for (const area of areas) {
+              body += `| ${area.label} | ${area.count} | +${area.additions} / -${area.deletions} |\n`;
+            }
+            
+            // Add review hints based on areas
+            const areaNames = areas.map(a => a.area);
+            const hints = [];
+            
+            if (areaNames.includes('go')) {
+              hints.push('- 🔧 Go changes detected: Ensure `make lint/go` and `make test/go` pass');
+            }
+            if (areaNames.includes('web')) {
+              hints.push('- 🌐 Web changes detected: Ensure `make lint/web` and `make test/web` pass');
+            }
+            if (areaNames.includes('manifests')) {
+              hints.push('- ⎈ Helm changes detected: Ensure `make lint/helm` passes');
+            }
+            if (areaNames.includes('docs')) {
+              hints.push('- 📚 Docs changes detected: Preview with `make run/site`');
+            }
+            if (areaNames.includes('examples')) {
+              hints.push('- 📝 Example changes detected: Verify `app.pipecd.yaml` syntax');
+            }
+            if (areaNames.length > 2) {
+              hints.push('- ⚠️ This PR touches multiple areas - consider splitting if changes are unrelated');
+            }
+            
+            if (hints.length > 0) {
+              body += `\n### Review Hints\n\n${hints.join('\n')}\n`;
+            }
+            
+            body += `\n---\n*This summary is auto-generated to help reviewers.*`;
+            
+            // Check for existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('PR Change Summary')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
